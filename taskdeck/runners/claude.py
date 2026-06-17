@@ -104,7 +104,10 @@ class ClaudeRunner(Runner):
     def abort(self, task):
         with self._lock:
             proc = self._procs.get(task["id"])
-            self._aborted.add(task["id"])  # tell the worker thread to stand down
+            if proc is not None:
+                # Only suppress the worker when one is actually running; otherwise
+                # a stale id would linger and silently drop a later run's result.
+                self._aborted.add(task["id"])
         if proc is not None:
             _terminate(proc)
         task["run_status"] = "aborted"

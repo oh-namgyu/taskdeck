@@ -8,10 +8,10 @@ can execute a card with an AI CLI.
 
 ![TaskDeck board](assets/screenshot.png)
 
-> **Status: work in progress.** Built so far (steps 1–4): a Flask app factory, a
-> SQLite store, the `/api/tasks` CRUD API, a vanilla-JS Kanban board UI, and an
-> *experimental, opt-in* Claude CLI agent runner. The public packaging (Docker,
-> CI, LICENSE, SECURITY.md) is not built yet.
+> **Status: v0.1.0.** A working Flask app factory, a SQLite store, the
+> `/api/tasks` CRUD API, a vanilla-JS Kanban board UI, an *experimental, opt-in*
+> Claude CLI agent runner, Docker/Compose, CI, and an MIT license. APIs may still
+> change before 1.0.
 
 ## What works now
 
@@ -86,4 +86,4 @@ python -m pytest -q
 
 ## License
 
-To be added with the public packaging step (planned: MIT).
+MIT — see [LICENSE](LICENSE).

@@ -17,6 +17,7 @@ through untouched.
 """
 from __future__ import annotations
 
+import hmac
 from urllib.parse import urlparse
 
 from flask import jsonify, request
@@ -31,11 +32,15 @@ def install_request_guard(app, config) -> None:
     def _guard():
         if request.method not in _UNSAFE:
             return None
-        if token and request.headers.get("X-TaskDeck-Token") != token:
+        if token and not hmac.compare_digest(
+            request.headers.get("X-TaskDeck-Token") or "", token
+        ):
             return jsonify({"error": "invalid or missing token"}), 403
+        # If a browser sent Origin/Referer, it must match our own host. A present
+        # but opaque/empty value (e.g. `Origin: null`, `data:`) is treated as a
+        # mismatch and rejected; only a truly absent header (non-browser client)
+        # is allowed.
         source = request.headers.get("Origin") or request.headers.get("Referer")
-        if source:
-            netloc = urlparse(source).netloc
-            if netloc and netloc != request.host:
-                return jsonify({"error": "cross-origin request blocked"}), 403
+        if source is not None and urlparse(source).netloc != request.host:
+            return jsonify({"error": "cross-origin request blocked"}), 403
         return None

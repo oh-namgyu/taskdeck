@@ -76,3 +76,25 @@ def test_runner_endpoint_absent_when_disabled(client):
     tid = _create(client).get_json()["task"]["id"]
     # runner disabled -> run blueprint not mounted -> 404
     assert client.post("/api/tasks/%d/run" % tid).status_code == 404
+
+
+def test_create_rejects_non_string_fields(client):
+    for bad in ({"title": "t", "body": [1, 2]},
+                {"title": "t", "project": {"x": 1}},
+                {"title": "t", "due_date": 5},
+                {"title": 123}):
+        assert client.post("/api/tasks", json=bad).status_code == 400
+
+
+def test_update_rejects_non_string_fields(client):
+    tid = _create(client).get_json()["task"]["id"]
+    assert client.put("/api/tasks/%d" % tid, json={"body": [1]}).status_code == 400
+
+
+def test_create_rejects_oversized_title(client):
+    assert client.post("/api/tasks", json={"title": "x" * 2000}).status_code == 400
+
+
+def test_timestamp_is_utc(client):
+    task = _create(client).get_json()["task"]
+    assert task["created_at"].endswith("Z")

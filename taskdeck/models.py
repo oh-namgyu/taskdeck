@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 SCHEMA_VERSION = 1
 
@@ -21,6 +22,9 @@ RUN_STATUSES = (
 # owned by the agent runner (step 3-4), never set directly by the API client.
 _WRITABLE = ("title", "body", "status", "project", "due_date", "tags")
 
+# Max lengths for free-text fields (reject oversized input rather than store it).
+_MAX_LEN = {"title": 1000, "body": 50000, "project": 200, "due_date": 64, "tag": 100}
+
 _id_lock = threading.Lock()
 _last_id = 0
 
@@ -30,7 +34,7 @@ class ValidationError(ValueError):
 
 
 def now_iso() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def new_id() -> int:
@@ -44,11 +48,27 @@ def new_id() -> int:
         return candidate
 
 
+def _coerce_str(value: Any, field: str, required: bool = False) -> Optional[str]:
+    """Validate an optional/required string field; trims and length-checks it."""
+    if value is None or (isinstance(value, str) and not value.strip() and required):
+        if required:
+            raise ValidationError("%s is required" % field)
+        return None
+    if not isinstance(value, str):
+        raise ValidationError("%s must be a string" % field)
+    text = value.strip()
+    if len(text) > _MAX_LEN.get(field, 10000):
+        raise ValidationError("%s is too long (max %d)" % (field, _MAX_LEN[field]))
+    return text
+
+
 def _norm_tags(tags: Any) -> List[str]:
     if tags is None:
         return []
     if not isinstance(tags, list) or any(not isinstance(t, str) for t in tags):
         raise ValidationError("tags must be a list of strings")
+    if any(len(t) > _MAX_LEN["tag"] for t in tags):
+        raise ValidationError("a tag is too long (max %d)" % _MAX_LEN["tag"])
     return tags
 
 
@@ -60,17 +80,14 @@ def _validate_status(status: Any) -> str:
 
 def build_task(data: Dict[str, Any]) -> Dict[str, Any]:
     """Build a complete task record from client create data."""
-    title = (data.get("title") or "").strip()
-    if not title:
-        raise ValidationError("title is required")
     ts = now_iso()
     return {
         "id": new_id(),
-        "title": title,
-        "body": data.get("body") or "",
+        "title": _coerce_str(data.get("title"), "title", required=True),
+        "body": _coerce_str(data.get("body"), "body") or "",
         "status": _validate_status(data.get("status", "todo")),
-        "project": data.get("project"),
-        "due_date": data.get("due_date"),
+        "project": _coerce_str(data.get("project"), "project"),
+        "due_date": _coerce_str(data.get("due_date"), "due_date"),
         "tags": _norm_tags(data.get("tags")),
         "run_status": "none",
         "run": None,
@@ -87,15 +104,12 @@ def apply_patch(task: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
         if key not in patch:
             continue
         if key == "title":
-            title = (patch.get("title") or "").strip()
-            if not title:
-                raise ValidationError("title cannot be empty")
-            updated["title"] = title
+            updated["title"] = _coerce_str(patch.get("title"), "title", required=True)
         elif key == "status":
             updated["status"] = _validate_status(patch["status"])
         elif key == "tags":
             updated["tags"] = _norm_tags(patch.get("tags"))
-        else:
-            updated[key] = patch[key]
+        else:  # body, project, due_date
+            updated[key] = _coerce_str(patch.get(key), key)
     updated["updated_at"] = now_iso()
     return updated

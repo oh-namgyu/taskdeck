@@ -42,3 +42,10 @@ def test_token_required_when_set(tmp_path):
     ok = c.post("/api/tasks", json={"title": "x"},
                 headers={"X-TaskDeck-Token": "s3cret"})
     assert ok.status_code == 201
+
+
+def test_opaque_origin_blocked(tmp_path):
+    # `Origin: null` (sandboxed iframe / data: doc) must not slip past the guard
+    c = _client(tmp_path)
+    assert c.post("/api/tasks", json={"title": "x"},
+                  headers={"Origin": "null"}).status_code == 403

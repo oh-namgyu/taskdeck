@@ -44,11 +44,12 @@ def test_complete_marks_done(echo_client):
     assert task["run_status"] == "completed"
 
 
-def test_abort(echo_client):
+def test_abort_rejected_after_finish(echo_client):
+    # echo finishes synchronously into awaiting_review, which is not running,
+    # so it can no longer be aborted
     tid = _new(echo_client)["id"]
     echo_client.post("/api/tasks/%d/run" % tid)
-    task = echo_client.post("/api/tasks/%d/abort" % tid).get_json()["task"]
-    assert task["run_status"] == "aborted"
+    assert echo_client.post("/api/tasks/%d/abort" % tid).status_code == 409
 
 
 def test_instruct_requires_awaiting_user(echo_client):
@@ -68,3 +69,13 @@ def test_unknown_runner_rejected(tmp_path):
     cfg.runner = "bogus"
     with pytest.raises(ValueError):
         create_app(cfg)
+
+
+def test_complete_requires_finished_run(echo_client):
+    tid = _new(echo_client)["id"]  # never run -> run_status "none"
+    assert echo_client.post("/api/tasks/%d/complete" % tid).status_code == 409
+
+
+def test_abort_requires_running(echo_client):
+    tid = _new(echo_client)["id"]  # never run -> not abortable
+    assert echo_client.post("/api/tasks/%d/abort" % tid).status_code == 409
