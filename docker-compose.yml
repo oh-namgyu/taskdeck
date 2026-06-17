@@ -1,0 +1,15 @@
+services:
+  taskdeck:
+    build: .
+    image: taskdeck:latest
+    # Host-side loopback only; the container is the network boundary.
+    ports:
+      - "127.0.0.1:6090:6090"
+    volumes:
+      - taskdeck-data:/data
+    environment:
+      - TASKDECK_RUNNER=none
+    restart: unless-stopped
+
+volumes:
+  taskdeck-data:

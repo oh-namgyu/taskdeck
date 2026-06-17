@@ -1,8 +1,12 @@
 # TaskDeck
 
+[![CI](https://github.com/oh-namgyu/taskdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/oh-namgyu/taskdeck/actions/workflows/ci.yml)
+
 A small, self-hostable **Kanban TODO board** (Todo → Doing → Review → Done) with
 zero external dependencies in its core, and an *optional, opt-in* agent runner that
 can execute a card with an AI CLI.
+
+![TaskDeck board](assets/screenshot.png)
 
 > **Status: work in progress.** Built so far (steps 1–4): a Flask app factory, a
 > SQLite store, the `/api/tasks` CRUD API, a vanilla-JS Kanban board UI, and an

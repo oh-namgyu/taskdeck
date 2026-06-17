@@ -20,7 +20,7 @@ import os
 import signal
 import subprocess
 import threading
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from ..models import now_iso
 from .base import Runner

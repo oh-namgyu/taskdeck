@@ -1,0 +1,19 @@
+[project]
+name = "taskdeck"
+version = "0.1.0"
+description = "A self-hostable Kanban TODO board with an optional, opt-in AI agent runner."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "oh-namgyu" }]
+dependencies = ["Flask>=2.3,<4"]
+
+[project.urls]
+Homepage = "https://github.com/oh-namgyu/taskdeck"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
