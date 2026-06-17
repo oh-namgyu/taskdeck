@@ -1,0 +1,189 @@
+"""Experimental Claude CLI runner.
+
+Executes a task by invoking the Claude CLI as a background subprocess and
+streaming the result back into the task's run state. This is the one place
+TaskDeck shells out to an external program, so it is hardened accordingly:
+
+- `shell=False` with an argument array (no shell interpolation of task text)
+- a minimal allowlisted environment (no leaking arbitrary host env)
+- a fixed, realpath-checked working directory that refuses sensitive locations
+- a hard timeout that terminates the whole process group (no orphans)
+- a cap on captured output size
+
+It is opt-in (`TASKDECK_RUNNER=claude`) and disabled by default. As a public,
+self-contained project this intentionally calls the CLI directly rather than
+through any private gateway.
+"""
+from __future__ import annotations
+
+import os
+import signal
+import subprocess
+import threading
+from typing import Any, Dict, Optional, Tuple
+
+from ..models import now_iso
+from .base import Runner
+
+_ENV_ALLOW = (
+    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM",
+    "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
+)
+
+_PROMPT_PREFIX = (
+    "You are completing a task from a kanban board. Work on it directly. "
+    "If you need information from the user before you can finish, end your reply "
+    "with a single final line of the form: [QUESTION] <your question>\n\nTask: "
+)
+
+_QUESTION_MARKER = "[QUESTION]"
+
+
+class RunnerError(RuntimeError):
+    pass
+
+
+def _safe_env() -> Dict[str, str]:
+    return {k: v for k, v in os.environ.items() if k in _ENV_ALLOW}
+
+
+def _parse_question(output: str) -> Optional[str]:
+    for line in reversed((output or "").strip().splitlines()):
+        line = line.strip()
+        if line.startswith(_QUESTION_MARKER):
+            return line[len(_QUESTION_MARKER):].strip() or None
+    return None
+
+
+def _last_line(output: str) -> str:
+    lines = [ln for ln in (output or "").splitlines() if ln.strip()]
+    return lines[-1][:300] if lines else ""
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    """Kill the whole process group so no child is orphaned."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        if proc.poll() is not None:
+            return
+        try:
+            os.killpg(os.getpgid(proc.pid), sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        try:
+            proc.wait(timeout=5)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
+class ClaudeRunner(Runner):
+    def __init__(self, store, config) -> None:
+        super().__init__(store, config)
+        self._procs: Dict[int, subprocess.Popen] = {}
+        self._aborted: set = set()
+        self._lock = threading.Lock()
+        self._cwd = self._resolve_cwd()
+
+    def _resolve_cwd(self) -> str:
+        root = os.path.realpath(self.config.run_cwd)
+        sensitive = {os.path.realpath(p) for p in
+                     ("/", "/etc", "/usr", "/bin", "/sbin", "/var",
+                      os.path.expanduser("~"))}
+        if root in sensitive:
+            raise RunnerError("refusing to run in sensitive directory: %s" % root)
+        os.makedirs(root, exist_ok=True)
+        return root
+
+    # --- Runner interface ---
+    def run(self, task):
+        return self._launch(task, _PROMPT_PREFIX + (task.get("body") or task["title"]))
+
+    def instruct(self, task, message):
+        return self._launch(task, self._compose_instruct(task, message))
+
+    def abort(self, task):
+        with self._lock:
+            proc = self._procs.get(task["id"])
+            self._aborted.add(task["id"])  # tell the worker thread to stand down
+        if proc is not None:
+            _terminate(proc)
+        task["run_status"] = "aborted"
+        task["status"] = "review"
+        return self.store.update_task(task)
+
+    # --- internals ---
+    def _compose_instruct(self, task, message: str) -> str:
+        body = task.get("body") or task["title"]
+        prev = (task.get("run") or {}).get("full_output", "")
+        return (_PROMPT_PREFIX + body
+                + "\n\n--- previous output ---\n" + prev[-2000:]
+                + "\n\n--- user answer ---\n" + message)
+
+    def _launch(self, task, prompt: str):
+        task["run_status"] = "running"
+        task["status"] = "doing"
+        task["run"] = {"started_at": now_iso(), "ended_at": None,
+                       "last_message": "", "full_output": "",
+                       "question": None, "exit_code": None}
+        self.store.update_task(task)
+        thread = threading.Thread(
+            target=self._execute, args=(task["id"], prompt), daemon=True)
+        thread.start()
+        return task
+
+    def _execute(self, task_id: int, prompt: str) -> None:
+        try:
+            output, code, timed_out = self._spawn(task_id, prompt)
+        except Exception as exc:  # noqa: BLE001 - surface any failure as run state
+            self._finish(task_id, "failed", str(exc), None)
+            return
+        if timed_out:
+            self._finish(task_id, "failed", output + "\n[timeout]", None)
+            return
+        question = _parse_question(output)
+        status = "awaiting_user" if question else "awaiting_review"
+        self._finish(task_id, status, output, code, question)
+
+    def _spawn(self, task_id: int, prompt: str) -> Tuple[str, Optional[int], bool]:
+        proc = subprocess.Popen(
+            [self.config.claude_bin, "-p", prompt],
+            cwd=self._cwd, env=_safe_env(),
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True, start_new_session=True,
+        )
+        with self._lock:
+            self._procs[task_id] = proc
+        timed_out = False
+        try:
+            output, _ = proc.communicate(timeout=self.config.run_timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _terminate(proc)
+            output, _ = proc.communicate()
+        finally:
+            with self._lock:
+                self._procs.pop(task_id, None)
+        capped = (output or "")[: self.config.run_maxbytes]
+        return capped, proc.returncode, timed_out
+
+    def _finish(self, task_id: int, run_status: str, output: str,
+                code: Optional[int], question: Optional[str] = None) -> None:
+        with self._lock:
+            if task_id in self._aborted:
+                self._aborted.discard(task_id)  # abort wins; don't overwrite
+                return
+        task = self.store.get_task(task_id)
+        if task is None:
+            return
+        run = task.get("run") or {}
+        run.update({
+            "ended_at": now_iso(),
+            "full_output": (output or "")[: self.config.run_maxbytes],
+            "last_message": _last_line(output),
+            "question": question,
+            "exit_code": code,
+        })
+        task["run"] = run
+        task["run_status"] = run_status
+        task["status"] = "doing" if run_status == "awaiting_user" else "review"
+        self.store.update_task(task)

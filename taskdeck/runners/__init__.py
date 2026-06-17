@@ -16,8 +16,9 @@ __all__ = ["Runner", "get_runner"]
 def _registry():
     # Imported lazily so the core never imports runner implementations unless one
     # is actually requested.
+    from .claude import ClaudeRunner
     from .echo import EchoRunner
-    return {"echo": EchoRunner}
+    return {"echo": EchoRunner, "claude": ClaudeRunner}
 
 
 def get_runner(config, store) -> Optional[Runner]:

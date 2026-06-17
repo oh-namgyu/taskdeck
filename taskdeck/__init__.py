@@ -13,6 +13,7 @@ from flask import Flask
 
 from .config import Config
 from .runners import get_runner
+from .security import install_request_guard
 from .store import get_store
 
 __all__ = ["create_app", "Config"]
@@ -25,6 +26,7 @@ def create_app(config: Optional[Config] = None) -> Flask:
     # Default static folder is the package's `static/` dir, served at /static.
     app = Flask(__name__)
     app.config["TASKDECK"] = config
+    install_request_guard(app, config)
     store = get_store(config)
     app.config["STORE"] = store
 
