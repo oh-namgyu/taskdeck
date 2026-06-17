@@ -26,6 +26,14 @@ FAKE_CONVO = (
     "    open('convo_done', 'w').close()\n"
     "    print('[QUESTION] more info?')\n"
 )
+# Exits non-zero (e.g. the CLI errored / isn't authenticated).
+FAKE_FAIL = "#!/usr/bin/env python3\nimport sys\nprint('boom'); sys.exit(3)\n"
+# Echoes an env var to prove the subprocess inherits the server environment.
+FAKE_ENV = (
+    "#!/usr/bin/env python3\n"
+    "import os\n"
+    "print('SAW=' + os.environ.get('TASKDECK_TEST_PROBE', 'MISSING'))\n"
+)
 
 
 def _fake(tmp_path, body):
@@ -72,6 +80,27 @@ def test_run_completes_to_review(tmp_path):
     assert t["run_status"] == "awaiting_review"
     assert t["status"] == "review"
     assert "did the work" in t["run"]["full_output"]
+
+
+def test_nonzero_exit_marks_failed(tmp_path):
+    app = _app(tmp_path, _fake(tmp_path, FAKE_FAIL))
+    client = app.test_client()
+    tid = _create(client)["id"]
+    client.post("/api/tasks/%d/run" % tid)
+    t = _wait(app.config["STORE"], tid)
+    assert t["run_status"] == "failed"
+    assert t["run"]["exit_code"] == 3
+
+
+def test_runner_inherits_environment(tmp_path, monkeypatch):
+    # a var outside any allowlist must reach the subprocess (so a CLI can auth)
+    monkeypatch.setenv("TASKDECK_TEST_PROBE", "visible")
+    app = _app(tmp_path, _fake(tmp_path, FAKE_ENV))
+    client = app.test_client()
+    tid = _create(client)["id"]
+    client.post("/api/tasks/%d/run" % tid)
+    t = _wait(app.config["STORE"], tid)
+    assert "SAW=visible" in t["run"]["full_output"]
 
 
 def test_run_question_awaits_user(tmp_path):

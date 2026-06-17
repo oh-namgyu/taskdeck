@@ -23,12 +23,13 @@ disabled by default**. When you enable it:
 - Scope `TASKDECK_RUN_CWD` to a throwaway workspace directory.
 - Optionally set `TASKDECK_TOKEN` to require a header on state-changing requests.
 
-This is **not** a sandbox. Only enable the runner in an environment you trust.
+The runner inherits the server's environment (so the CLI can authenticate as it
+normally would), so this is **not** a sandbox. Only enable the runner in an
+environment you trust, and isolate it with a container.
 
 ### Built-in hardening
 
 - `shell=False` with an argument array (no shell interpolation of task text)
-- a minimal allowlisted subprocess environment
 - a realpath-checked working directory; sensitive system paths are refused
 - a hard per-run timeout that terminates the whole process group (no orphans)
 - a cap on captured output size

@@ -67,9 +67,10 @@ you to answer (`instruct`) or Review (`awaiting_review`) → Done (`complete`).
 > files. It is experimental and **off by default**. When you enable it: keep the
 > server on loopback, run it inside an isolated container, and scope
 > `TASKDECK_RUN_CWD` to a throwaway workspace. The runner uses `shell=False` with
-> an argument array, a minimal allowlisted environment, a realpath-checked working
-> directory (sensitive paths refused), a hard timeout that kills the whole process
-> group, and an output cap. State-changing requests are protected by an
+> an argument array, a realpath-checked working directory (sensitive paths
+> refused), a hard timeout that kills the whole process group, and an output cap;
+> it inherits the server's environment so the CLI can authenticate. State-changing
+> requests are protected by an
 > Origin/Referer check and an optional `TASKDECK_TOKEN`. This does **not** fully
 > sandbox the agent — only run it in an environment you trust. See
 > [SECURITY.md](SECURITY.md) for the full threat model.

@@ -5,10 +5,13 @@ streaming the result back into the task's run state. This is the one place
 TaskDeck shells out to an external program, so it is hardened accordingly:
 
 - `shell=False` with an argument array (no shell interpolation of task text)
-- a minimal allowlisted environment (no leaking arbitrary host env)
 - a fixed, realpath-checked working directory that refuses sensitive locations
 - a hard timeout that terminates the whole process group (no orphans)
 - a cap on captured output size
+
+The subprocess inherits the server's environment, because it runs the user's own
+CLI, which needs that context (e.g. its credentials) exactly as if the user ran
+it by hand. Isolate with a container, not an env filter (see SECURITY.md).
 
 It is opt-in (`TASKDECK_RUNNER=claude`) and disabled by default. As a public,
 self-contained project this intentionally calls the CLI directly rather than
@@ -30,11 +33,6 @@ from typing import Dict, Optional, Tuple
 from ..models import now_iso
 from .base import Runner
 
-_ENV_ALLOW = (
-    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM",
-    "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
-)
-
 _PROMPT_PREFIX = (
     "You are completing a task from a kanban board. Work on it directly. "
     "If you need information from the user before you can finish, end your reply "
@@ -50,8 +48,10 @@ class RunnerError(RuntimeError):
     pass
 
 
-def _safe_env() -> Dict[str, str]:
-    return {k: v for k, v in os.environ.items() if k in _ENV_ALLOW}
+def _runner_env() -> Dict[str, str]:
+    # Inherit the server's environment so the user's CLI has its usual context
+    # (notably its auth). Isolation is the container's job, not an env filter.
+    return dict(os.environ)
 
 
 def _parse_question(output: str) -> Optional[str]:
@@ -161,6 +161,11 @@ class ClaudeRunner(Runner):
         if timed_out:
             self._finish(task_id, gen, "failed", output + "\n[timeout]", None)
             return
+        if code != 0:
+            # e.g. the CLI errored or isn't authenticated; surface it as failed
+            # rather than letting a non-zero run masquerade as awaiting_review.
+            self._finish(task_id, gen, "failed", output, code)
+            return
         question = _parse_question(output)
         status = "awaiting_user" if question else "awaiting_review"
         self._finish(task_id, gen, status, output, code, question)
@@ -168,7 +173,7 @@ class ClaudeRunner(Runner):
     def _spawn(self, task_id: int, prompt: str) -> Tuple[str, Optional[int], bool]:
         proc = subprocess.Popen(
             [self.config.claude_bin, "-p", prompt],
-            cwd=self._cwd, env=_safe_env(),
+            cwd=self._cwd, env=_runner_env(),
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, start_new_session=True,
         )
