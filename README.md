@@ -71,8 +71,8 @@ you to answer (`instruct`) or Review (`awaiting_review`) → Done (`complete`).
 > directory (sensitive paths refused), a hard timeout that kills the whole process
 > group, and an output cap. State-changing requests are protected by an
 > Origin/Referer check and an optional `TASKDECK_TOKEN`. This does **not** fully
-> sandbox the agent — only run it in an environment you trust. A formal
-> `SECURITY.md` ships with the public-packaging step.
+> sandbox the agent — only run it in an environment you trust. See
+> [SECURITY.md](SECURITY.md) for the full threat model.
 
 The built-in `echo` runner (`TASKDECK_RUNNER=echo`) does no real work and exists
 for tests/demos of the run lifecycle.

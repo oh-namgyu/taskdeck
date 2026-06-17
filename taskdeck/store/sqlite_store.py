@@ -19,6 +19,10 @@ _COLUMNS = (
     "tags", "run_status", "run", "created_at", "updated_at", "schema_version",
 )
 
+# SQLite stores INTEGER as signed 64-bit; ids outside this range can't exist and
+# would raise OverflowError on bind, so treat them as simply not-found.
+_INT64_MAX = 2 ** 63 - 1
+
 
 def _row_to_task(row: sqlite3.Row) -> Dict[str, Any]:
     task = {key: row[key] for key in _COLUMNS}
@@ -99,6 +103,8 @@ class SqliteStore(Store):
         return [_row_to_task(r) for r in rows]
 
     def get_task(self, task_id):
+        if not 0 <= task_id <= _INT64_MAX:
+            return None
         with self._lock:
             row = self._conn.execute(
                 "SELECT * FROM tasks WHERE id = ?", (task_id,)
@@ -126,6 +132,8 @@ class SqliteStore(Store):
         return task
 
     def delete_task(self, task_id):
+        if not 0 <= task_id <= _INT64_MAX:
+            return False
         with self._lock, self._conn:
             cur = self._conn.execute(
                 "DELETE FROM tasks WHERE id = ?", (task_id,)

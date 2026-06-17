@@ -121,6 +121,22 @@ def test_instruct_after_question(tmp_path):
     assert "finished after your answer" in t["run"]["full_output"]
 
 
+def test_rerun_allowed_after_abort(tmp_path):
+    # aborting a running task must not brick it: a fresh run is still accepted
+    app = _app(tmp_path, _fake(tmp_path, FAKE_SLOW))
+    client = app.test_client()
+    store = app.config["STORE"]
+    tid = _create(client)["id"]
+    client.post("/api/tasks/%d/run" % tid)
+    time.sleep(0.4)
+    assert client.post("/api/tasks/%d/abort" % tid).get_json()["task"]["run_status"] == "aborted"
+    # re-run is accepted (not stuck at 409) and the abort is not resurrected
+    assert client.post("/api/tasks/%d/run" % tid).status_code == 202
+    time.sleep(0.3)
+    assert store.get_task(tid)["run_status"] == "running"
+    client.post("/api/tasks/%d/abort" % tid)  # cleanup
+
+
 def test_sensitive_run_cwd_rejected(tmp_path):
     cfg = Config()
     cfg.data_dir = str(tmp_path)

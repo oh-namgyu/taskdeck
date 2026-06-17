@@ -13,6 +13,11 @@ TaskDeck shells out to an external program, so it is hardened accordingly:
 It is opt-in (`TASKDECK_RUNNER=claude`) and disabled by default. As a public,
 self-contained project this intentionally calls the CLI directly rather than
 through any private gateway.
+
+Each run is tagged with a monotonic generation. A worker thread only writes its
+result back if its generation is still the active one for the task; `abort` (and
+a superseding run) drops the generation, so a late-finishing or killed worker can
+never overwrite an aborted/newer state.
 """
 from __future__ import annotations
 
@@ -37,6 +42,8 @@ _PROMPT_PREFIX = (
 )
 
 _QUESTION_MARKER = "[QUESTION]"
+
+_SENSITIVE_DIRS = ("/", "/etc", "/usr", "/bin", "/sbin", "/var", "/root")
 
 
 class RunnerError(RuntimeError):
@@ -80,15 +87,17 @@ class ClaudeRunner(Runner):
     def __init__(self, store, config) -> None:
         super().__init__(store, config)
         self._procs: Dict[int, subprocess.Popen] = {}
-        self._aborted: set = set()
+        self._active: Dict[int, int] = {}  # task_id -> current run generation
+        self._counter = 0
         self._lock = threading.Lock()
         self._cwd = self._resolve_cwd()
 
     def _resolve_cwd(self) -> str:
+        # Exact-match check only: rejecting whole subtrees would also reject
+        # legitimate temp/data dirs (e.g. macOS tmp lives under /private/var).
         root = os.path.realpath(self.config.run_cwd)
-        sensitive = {os.path.realpath(p) for p in
-                     ("/", "/etc", "/usr", "/bin", "/sbin", "/var",
-                      os.path.expanduser("~"))}
+        sensitive = {os.path.realpath(p) for p in _SENSITIVE_DIRS}
+        sensitive.add(os.path.realpath(os.path.expanduser("~")))
         if root in sensitive:
             raise RunnerError("refusing to run in sensitive directory: %s" % root)
         os.makedirs(root, exist_ok=True)
@@ -102,12 +111,12 @@ class ClaudeRunner(Runner):
         return self._launch(task, self._compose_instruct(task, message))
 
     def abort(self, task):
+        tid = task["id"]
         with self._lock:
-            proc = self._procs.get(task["id"])
-            if proc is not None:
-                # Only suppress the worker when one is actually running; otherwise
-                # a stale id would linger and silently drop a later run's result.
-                self._aborted.add(task["id"])
+            # Drop the active generation so the worker's _finish (after the kill)
+            # cannot overwrite the aborted state, regardless of timing.
+            self._active.pop(tid, None)
+            proc = self._procs.get(tid)
         if proc is not None:
             _terminate(proc)
         task["run_status"] = "aborted"
@@ -123,6 +132,15 @@ class ClaudeRunner(Runner):
                 + "\n\n--- user answer ---\n" + message)
 
     def _launch(self, task, prompt: str):
+        tid = task["id"]
+        with self._lock:
+            if tid in self._active:
+                # Already running (e.g. a duplicate concurrent request): no-op,
+                # don't spawn a second, untracked subprocess.
+                return self.store.get_task(tid) or task
+            self._counter += 1
+            gen = self._counter
+            self._active[tid] = gen
         task["run_status"] = "running"
         task["status"] = "doing"
         task["run"] = {"started_at": now_iso(), "ended_at": None,
@@ -130,22 +148,22 @@ class ClaudeRunner(Runner):
                        "question": None, "exit_code": None}
         self.store.update_task(task)
         thread = threading.Thread(
-            target=self._execute, args=(task["id"], prompt), daemon=True)
+            target=self._execute, args=(tid, gen, prompt), daemon=True)
         thread.start()
         return task
 
-    def _execute(self, task_id: int, prompt: str) -> None:
+    def _execute(self, task_id: int, gen: int, prompt: str) -> None:
         try:
             output, code, timed_out = self._spawn(task_id, prompt)
         except Exception as exc:  # noqa: BLE001 - surface any failure as run state
-            self._finish(task_id, "failed", str(exc), None)
+            self._finish(task_id, gen, "failed", str(exc), None)
             return
         if timed_out:
-            self._finish(task_id, "failed", output + "\n[timeout]", None)
+            self._finish(task_id, gen, "failed", output + "\n[timeout]", None)
             return
         question = _parse_question(output)
         status = "awaiting_user" if question else "awaiting_review"
-        self._finish(task_id, status, output, code, question)
+        self._finish(task_id, gen, status, output, code, question)
 
     def _spawn(self, task_id: int, prompt: str) -> Tuple[str, Optional[int], bool]:
         proc = subprocess.Popen(
@@ -165,16 +183,17 @@ class ClaudeRunner(Runner):
             output, _ = proc.communicate()
         finally:
             with self._lock:
-                self._procs.pop(task_id, None)
+                if self._procs.get(task_id) is proc:
+                    self._procs.pop(task_id, None)
         capped = (output or "")[: self.config.run_maxbytes]
         return capped, proc.returncode, timed_out
 
-    def _finish(self, task_id: int, run_status: str, output: str,
+    def _finish(self, task_id: int, gen: int, run_status: str, output: str,
                 code: Optional[int], question: Optional[str] = None) -> None:
         with self._lock:
-            if task_id in self._aborted:
-                self._aborted.discard(task_id)  # abort wins; don't overwrite
-                return
+            if self._active.get(task_id) != gen:
+                return  # aborted or superseded by a newer run; don't overwrite
+            self._active.pop(task_id, None)  # this run is complete
         task = self.store.get_task(task_id)
         if task is None:
             return

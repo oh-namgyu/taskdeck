@@ -3,7 +3,7 @@
 A runner *executes* a task card (vs. the core, where a human moves cards by
 hand). Runners are optional and opt-in via `TASKDECK_RUNNER`; the core never
 depends on one. Implementations: `echo` (built-in, synchronous, for tests/demos)
-and, from step 4, `claude` (subprocess to the Claude CLI).
+and `claude` (subprocess to the Claude CLI).
 
 Each method receives and returns the task dict. A runner is given the store so an
 asynchronous implementation can persist later state transitions on its own; the

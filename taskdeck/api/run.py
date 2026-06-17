@@ -1,7 +1,7 @@
 """Runner endpoints. Mounted only when a runner is enabled (see app factory),
 so with TASKDECK_RUNNER=none these paths return 404.
 
-Contract (plan §4-API):
+Contract:
   POST /api/tasks/<id>/run       202  | 404 | 409 already running
   POST /api/tasks/<id>/instruct  200  | 404 | 409 not awaiting user | 400 no message
   POST /api/tasks/<id>/complete  200  | 404 | 409 no finished run

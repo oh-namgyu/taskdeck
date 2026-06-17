@@ -7,7 +7,7 @@ const filters = { project: "", date: "" };
 
 const api = {
   list(query) {
-    return fetch("/api/tasks" + query).then((r) => r.json()).then((d) => d.tasks);
+    return fetch("/api/tasks" + query).then(ok).then((r) => r.json()).then((d) => d.tasks);
   },
   create(data) {
     return send("/api/tasks", "POST", data);
@@ -16,16 +16,26 @@ const api = {
     return send("/api/tasks/" + id, "PUT", patch);
   },
   remove(id) {
-    return fetch("/api/tasks/" + id, { method: "DELETE" });
+    return fetch("/api/tasks/" + id, { method: "DELETE" }).then(ok);
   },
 };
+
+function ok(res) {
+  if (!res.ok) throw new Error(res.status + " " + res.statusText);
+  return res;
+}
 
 function send(url, method, body) {
   return fetch(url, {
     method: method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  });
+  }).then(ok);
+}
+
+function fail(err) {
+  console.error(err);
+  window.alert("Request failed: " + err.message);
 }
 
 // --- DOM helpers (no inline styles; classes only) ---
@@ -46,6 +56,7 @@ function iconButton(label, title, handler) {
   b.type = "button";
   b.textContent = label;
   b.title = title;
+  b.setAttribute("aria-label", title);
   b.addEventListener("click", handler);
   return b;
 }
@@ -84,9 +95,10 @@ function cardElement(task) {
   card.appendChild(title);
 
   const tags = task.tags || [];
-  if (task.project || tags.length) {
+  if (task.project || task.due_date || tags.length) {
     const meta = el("div", "kanban-card-meta");
     if (task.project) meta.appendChild(badge(task.project));
+    if (task.due_date) meta.appendChild(badge("📅 " + task.due_date, "badge-tag"));
     tags.forEach((tag) => meta.appendChild(badge(tag, "badge-tag")));
     card.appendChild(meta);
   }
@@ -109,39 +121,63 @@ function cardActions(task) {
   return row;
 }
 
-// --- Actions ---
+// --- Actions (each surfaces request failures instead of swallowing them) ---
 async function move(task, toIdx) {
-  await api.update(task.id, { status: STATUSES[toIdx] });
-  refresh();
+  try {
+    await api.update(task.id, { status: STATUSES[toIdx] });
+    await refresh();
+  } catch (e) {
+    fail(e);
+  }
 }
 
 async function edit(task) {
   const next = window.prompt("Edit task title", task.title);
-  if (next && next.trim()) {
+  if (!next || !next.trim()) return;
+  try {
     await api.update(task.id, { title: next.trim() });
-    refresh();
+    await refresh();
+  } catch (e) {
+    fail(e);
   }
 }
 
 async function removeTask(task) {
-  if (window.confirm('Delete "' + task.title + '"?')) {
+  if (!window.confirm('Delete "' + task.title + '"?')) return;
+  try {
     await api.remove(task.id);
-    refresh();
+    await refresh();
+  } catch (e) {
+    fail(e);
   }
 }
 
 async function addTask() {
   const titleInput = document.getElementById("new-title");
   const projectInput = document.getElementById("new-project");
+  const dueInput = document.getElementById("new-due");
   const title = titleInput.value.trim();
   if (!title) return;
-  await api.create({ title: title, project: projectInput.value.trim() || null });
-  titleInput.value = "";
-  refresh();
+  try {
+    await api.create({
+      title: title,
+      project: projectInput.value.trim() || null,
+      due_date: dueInput.value || null,
+    });
+    titleInput.value = "";
+    dueInput.value = "";
+    await refresh();
+  } catch (e) {
+    fail(e);
+  }
 }
 
 async function refresh() {
-  render(await api.list(buildQuery()));
+  try {
+    render(await api.list(buildQuery()));
+  } catch (e) {
+    fail(e);
+  }
 }
 
 // --- Wiring ---

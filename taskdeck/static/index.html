@@ -9,12 +9,13 @@
 <body>
   <header class="toolbar">
     <h1 class="app-title">TaskDeck</h1>
-    <input id="new-title" class="input" type="text" placeholder="New task (Enter to add)" autocomplete="off">
-    <input id="new-project" class="input input-sm" type="text" placeholder="project (optional)" autocomplete="off">
+    <input id="new-title" class="input" type="text" placeholder="New task (Enter to add)" aria-label="New task title" autocomplete="off">
+    <input id="new-project" class="input input-sm" type="text" placeholder="project (optional)" aria-label="New task project" autocomplete="off">
+    <input id="new-due" class="input input-sm" type="date" aria-label="New task due date" title="due date (optional)">
     <button id="add-btn" class="btn btn-primary" type="button">Add</button>
     <span class="toolbar-spacer"></span>
-    <input id="filter-project" class="input input-sm" type="text" placeholder="filter project" autocomplete="off">
-    <input id="filter-date" class="input input-sm" type="date" title="filter by due date">
+    <input id="filter-project" class="input input-sm" type="text" placeholder="filter project" aria-label="Filter by project" autocomplete="off">
+    <input id="filter-date" class="input input-sm" type="date" aria-label="Filter by due date" title="filter by due date">
     <span id="progress" class="badge progress-badge">0/0 done</span>
   </header>
 

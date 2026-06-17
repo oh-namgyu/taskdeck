@@ -2,8 +2,8 @@
 
 It does no real work: it "executes" a card by echoing its body, completing
 immediately into the Review column. It exercises the runner wiring and the run
-endpoints without any external dependency. The real Claude CLI runner (step 4)
-implements the same interface asynchronously.
+endpoints without any external dependency. The Claude CLI runner implements the
+same interface asynchronously.
 """
 from __future__ import annotations
 

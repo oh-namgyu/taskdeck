@@ -98,3 +98,16 @@ def test_create_rejects_oversized_title(client):
 def test_timestamp_is_utc(client):
     task = _create(client).get_json()["task"]
     assert task["created_at"].endswith("Z")
+
+
+def test_oversized_task_id_is_not_found(client):
+    big = 2 ** 63 + 5  # outside SQLite's signed-64-bit range
+    assert client.put("/api/tasks/%d" % big, json={"status": "done"}).status_code == 404
+    assert client.delete("/api/tasks/%d" % big).status_code == 404
+
+
+def test_filter_by_due_date(client):
+    client.post("/api/tasks", json={"title": "a", "due_date": "2026-01-01"})
+    client.post("/api/tasks", json={"title": "b", "due_date": "2026-02-02"})
+    got = client.get("/api/tasks?date=2026-01-01").get_json()["tasks"]
+    assert len(got) == 1 and got[0]["title"] == "a"

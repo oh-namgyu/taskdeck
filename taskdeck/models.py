@@ -19,7 +19,7 @@ RUN_STATUSES = (
 )
 
 # Fields a client may set when creating or updating a task. run_status / run are
-# owned by the agent runner (step 3-4), never set directly by the API client.
+# owned by the agent runner, never set directly by the API client.
 _WRITABLE = ("title", "body", "status", "project", "due_date", "tags")
 
 # Max lengths for free-text fields (reject oversized input rather than store it).

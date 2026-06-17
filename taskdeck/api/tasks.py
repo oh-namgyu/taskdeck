@@ -1,4 +1,4 @@
-"""Task CRUD API. Contract documented in README / plan §4-API.
+"""Task CRUD API. Contract documented in the README.
 
 The store is resolved from the app config per request, so tests can inject a
 temporary database via the app factory.
