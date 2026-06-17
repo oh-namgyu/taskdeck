@@ -4,14 +4,17 @@ A small, self-hostable **Kanban TODO board** (Todo → Doing → Review → Done
 zero external dependencies in its core, and an *optional, opt-in* agent runner that
 can execute a card with an AI CLI.
 
-> **Status: work in progress.** This commit contains the **core backend only**
-> (step 1 of the build): a Flask app factory, a SQLite store, and the `/api/tasks`
-> CRUD API. The Kanban frontend, the agent runner plugin, and the public packaging
-> (Docker, CI, LICENSE, SECURITY) are not built yet.
+> **Status: work in progress.** Built so far (steps 1–2): a Flask app factory, a
+> SQLite store, the `/api/tasks` CRUD API, and a vanilla-JS Kanban board UI. The
+> agent runner plugin and the public packaging (Docker, CI, LICENSE, SECURITY) are
+> not built yet.
 
-## Core backend (current)
+## What works now
 
-- **Stack:** Python (>=3.9) + Flask, storage via stdlib `sqlite3`.
+- **Stack:** Python (>=3.9) + Flask, storage via stdlib `sqlite3`, no-build
+  vanilla-JS frontend.
+- **Kanban board:** 4 columns (Todo / Doing / Review / Done) with add, edit,
+  delete, column moves, project/date filters, and a done-count badge.
 - **No private infrastructure:** configuration is entirely environment-driven; no
   hardcoded paths or external services.
 
@@ -19,8 +22,10 @@ can execute a card with an AI CLI.
 
 ```bash
 pip install -r requirements.txt
-python run.py            # serves on http://127.0.0.1:6090
+python run.py            # board UI + API on http://127.0.0.1:6090
 ```
+
+Open <http://127.0.0.1:6090> for the board; the JSON API lives under `/api`.
 
 ### Configuration (environment variables)
 

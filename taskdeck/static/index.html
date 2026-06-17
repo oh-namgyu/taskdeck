@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TaskDeck</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="toolbar">
+    <h1 class="app-title">TaskDeck</h1>
+    <input id="new-title" class="input" type="text" placeholder="New task (Enter to add)" autocomplete="off">
+    <input id="new-project" class="input input-sm" type="text" placeholder="project (optional)" autocomplete="off">
+    <button id="add-btn" class="btn btn-primary" type="button">Add</button>
+    <span class="toolbar-spacer"></span>
+    <input id="filter-project" class="input input-sm" type="text" placeholder="filter project" autocomplete="off">
+    <input id="filter-date" class="input input-sm" type="date" title="filter by due date">
+    <span id="progress" class="badge progress-badge">0/0 done</span>
+  </header>
+
+  <main class="kanban">
+    <section class="kanban-col">
+      <div class="kanban-col-header">Todo <span class="badge kanban-count" data-status="todo">0</span></div>
+      <div class="kanban-items" data-status="todo"></div>
+    </section>
+    <section class="kanban-col">
+      <div class="kanban-col-header">Doing <span class="badge kanban-count" data-status="doing">0</span></div>
+      <div class="kanban-items" data-status="doing"></div>
+    </section>
+    <section class="kanban-col">
+      <div class="kanban-col-header">Review <span class="badge kanban-count" data-status="review">0</span></div>
+      <div class="kanban-items" data-status="review"></div>
+    </section>
+    <section class="kanban-col">
+      <div class="kanban-col-header">Done <span class="badge kanban-count" data-status="done">0</span></div>
+      <div class="kanban-items" data-status="done"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
