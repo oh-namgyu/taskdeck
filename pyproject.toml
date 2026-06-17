@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "taskdeck"
 version = "0.1.0"
@@ -6,10 +10,16 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "oh-namgyu" }]
-dependencies = ["Flask>=2.3,<4"]
+dependencies = ["Flask>=3.0,<4"]
 
 [project.urls]
 Homepage = "https://github.com/oh-namgyu/taskdeck"
+
+[tool.setuptools.packages.find]
+include = ["taskdeck*"]
+
+[tool.setuptools.package-data]
+taskdeck = ["static/*"]
 
 [tool.ruff]
 line-length = 100

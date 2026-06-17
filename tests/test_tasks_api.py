@@ -1,3 +1,7 @@
+from taskdeck import create_app
+from taskdeck.config import Config
+
+
 def _create(client, **fields):
     payload = {"title": "demo"}
     payload.update(fields)
@@ -111,3 +115,25 @@ def test_filter_by_due_date(client):
     client.post("/api/tasks", json={"title": "b", "due_date": "2026-02-02"})
     got = client.get("/api/tasks?date=2026-01-01").get_json()["tasks"]
     assert len(got) == 1 and got[0]["title"] == "a"
+
+
+def test_oversized_request_body_rejected(client):
+    payload = '{"title":"' + "x" * 1_100_000 + '"}'
+    r = client.post("/api/tasks", data=payload, content_type="application/json")
+    assert r.status_code == 413
+
+
+def test_running_reconciled_on_restart(tmp_path):
+    cfg = Config()
+    cfg.data_dir = str(tmp_path)
+    app1 = create_app(cfg)
+    tid = app1.test_client().post("/api/tasks", json={"title": "x"}).get_json()["task"]["id"]
+    stuck = app1.config["STORE"].get_task(tid)
+    stuck["run_status"], stuck["status"] = "running", "doing"
+    app1.config["STORE"].update_task(stuck)
+
+    # a fresh app on the same data dir = "restart": orphaned runs are reconciled
+    cfg2 = Config()
+    cfg2.data_dir = str(tmp_path)
+    t = create_app(cfg2).config["STORE"].get_task(tid)
+    assert t["run_status"] == "aborted" and t["status"] == "review"

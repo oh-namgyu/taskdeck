@@ -1,7 +1,7 @@
 """Storage interface.
 
 Implementations persist task dicts (already built/validated by `models`). v1 ships
-`sqlite_store`; `json_store` is a planned alternative behind this same interface.
+a single SQLite-backed store; the interface leaves room for alternatives.
 """
 from __future__ import annotations
 

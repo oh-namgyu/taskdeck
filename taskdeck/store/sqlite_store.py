@@ -65,6 +65,13 @@ class SqliteStore(Store):
                 "created_at TEXT, updated_at TEXT, schema_version INTEGER)"
             )
             self._guard_version()
+            # A run cannot survive a process restart (the worker thread and its
+            # subprocess are gone), so any row left "running" is orphaned. Move it
+            # to review/aborted so it isn't stuck (and can't wedge a re-run at 409).
+            self._conn.execute(
+                "UPDATE tasks SET run_status = 'aborted', status = 'review' "
+                "WHERE run_status = 'running'"
+            )
 
     def _guard_version(self) -> None:
         row = self._conn.execute(

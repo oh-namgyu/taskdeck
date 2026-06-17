@@ -26,6 +26,9 @@ def create_app(config: Optional[Config] = None) -> Flask:
     # Default static folder is the package's `static/` dir, served at /static.
     app = Flask(__name__)
     app.config["TASKDECK"] = config
+    # Reject oversized bodies before they are read into memory (field-level
+    # length caps in models only kick in after parsing).
+    app.config["MAX_CONTENT_LENGTH"] = 1_000_000
     install_request_guard(app, config)
     store = get_store(config)
     app.config["STORE"] = store
