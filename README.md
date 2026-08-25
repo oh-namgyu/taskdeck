@@ -15,7 +15,7 @@ can execute a card with an AI CLI.
 
 ## What works now
 
-- **Stack:** Python (>=3.9) + Flask, storage via stdlib `sqlite3`, no-build
+- **Stack:** Python (>=3.10) + Flask, storage via stdlib `sqlite3`, no-build
   vanilla-JS frontend.
 - **Kanban board:** 4 columns (Todo / Doing / Review / Done) with add, edit,
   delete, column moves, project/date filters, and a done-count badge.
