@@ -1,6 +1,7 @@
 # TaskDeck
 
 [![CI](https://github.com/oh-namgyu/taskdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/oh-namgyu/taskdeck/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **한글 요약** — 셀프호스트 칸반 TODO 보드입니다 — 코어는 외부 의존성 제로, 원하면 켜는(opt-in) AI 에이전트 러너를 붙일 수 있습니다.
 
@@ -89,4 +90,4 @@ python -m pytest -q
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Security policy: [SECURITY.md](SECURITY.md).
