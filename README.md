@@ -11,7 +11,7 @@ can execute a card with an AI CLI.
 
 ![TaskDeck board](assets/screenshot.png)
 
-> **Status: v0.1.0.** A working Flask app factory, a SQLite store, the
+> **Status: v0.2.0.** A working Flask app factory, a SQLite store, the
 > `/api/tasks` CRUD API, a vanilla-JS Kanban board UI, an *experimental, opt-in*
 > Claude CLI agent runner, Docker/Compose, CI, and an MIT license. APIs may still
 > change before 1.0.
